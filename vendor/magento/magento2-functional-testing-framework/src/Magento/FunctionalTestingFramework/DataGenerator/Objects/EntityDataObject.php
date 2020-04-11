@@ -7,7 +7,9 @@
 namespace Magento\FunctionalTestingFramework\DataGenerator\Objects;
 
 use Magento\FunctionalTestingFramework\Config\MftfApplicationConfig;
+use Magento\FunctionalTestingFramework\DataGenerator\Util\GenerationDataReferenceResolver;
 use Magento\FunctionalTestingFramework\Exceptions\TestFrameworkException;
+use Magento\FunctionalTestingFramework\Exceptions\TestReferenceException;
 use Magento\FunctionalTestingFramework\Util\Logger\LoggingUtil;
 
 /**
@@ -73,6 +75,12 @@ class EntityDataObject
     private $parentEntity;
 
     /**
+     * String of filename
+     * @var string
+     */
+    private $filename;
+
+    /**
      * Constructor
      *
      * @param string   $name
@@ -82,9 +90,18 @@ class EntityDataObject
      * @param string[] $uniquenessData
      * @param string[] $vars
      * @param string   $parentEntity
+     * @param string   $filename
      */
-    public function __construct($name, $type, $data, $linkedEntities, $uniquenessData, $vars = [], $parentEntity = null)
-    {
+    public function __construct(
+        $name,
+        $type,
+        $data,
+        $linkedEntities,
+        $uniquenessData,
+        $vars = [],
+        $parentEntity = null,
+        $filename = null
+    ) {
         $this->name = $name;
         $this->type = $type;
         $this->data = $data;
@@ -95,6 +112,7 @@ class EntityDataObject
 
         $this->vars = $vars;
         $this->parentEntity = $parentEntity;
+        $this->filename = $filename;
     }
 
     /**
@@ -105,6 +123,16 @@ class EntityDataObject
     public function getName()
     {
         return $this->name;
+    }
+
+    /**
+     * Getter for the Entity Filename
+     *
+     * @return string
+     */
+    public function getFilename()
+    {
+        return $this->filename;
     }
 
     /**
@@ -149,17 +177,59 @@ class EntityDataObject
             throw new TestFrameworkException($exceptionMessage);
         }
 
-        $name_lower = strtolower($name);
+        if ($this->data === null) {
+            return null;
+        }
+        return $this->resolveDataReferences($name, $uniquenessFormat);
+    }
 
-        if ($this->data !== null && array_key_exists($name_lower, $this->data)) {
-            $uniquenessData = $this->getUniquenessDataByName($name_lower);
+    /**
+     * Resolves data references in entities while generating static test files.
+     *
+     * @param string  $name
+     * @param integer $uniquenessFormat
+     * @return string|null
+     * @throws TestFrameworkException
+     * @throws TestReferenceException
+     */
+    private function resolveDataReferences($name, $uniquenessFormat)
+    {
+        $name_lower = strtolower($name);
+        $dataReferenceResolver = new GenerationDataReferenceResolver();
+        if (array_key_exists($name_lower, $this->data)) {
+            if (is_array($this->data[$name_lower])) {
+                return $this->data[$name_lower];
+            }
+            $uniquenessData = $this->getUniquenessDataByName($name_lower) === null
+                ? $dataReferenceResolver->getDataUniqueness(
+                    $this->data[$name_lower],
+                    $this->name . '.' . $name
+                )
+                : $this->getUniquenessDataByName($name_lower);
+            if ($uniquenessData !== null) {
+                $this->uniquenessData[$name] = $uniquenessData;
+            }
+            $this->data[$name_lower] = $dataReferenceResolver->getDataReference(
+                $this->data[$name_lower],
+                $this->name . '.' . $name
+            );
             if (null === $uniquenessData || $uniquenessFormat == self::NO_UNIQUE_PROCESS) {
                 return $this->data[$name_lower];
             }
             return $this->formatUniqueData($name_lower, $uniquenessData, $uniquenessFormat);
+        } elseif (array_key_exists($name, $this->data)) {
+            if (is_array($this->data[$name])) {
+                return $this->data[$name];
+            }
+            $this->data[$name] = $dataReferenceResolver->getDataReference(
+                $this->data[$name],
+                $this->name . '.' . $name
+            );
+            // Data returned by the API may be camelCase so we need to check for the original $name also.
+            return $this->data[$name];
+        } else {
+            return null;
         }
-
-        return null;
     }
 
     /**

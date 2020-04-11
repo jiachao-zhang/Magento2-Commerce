@@ -11,14 +11,9 @@ if (!empty($_POST['token']) && !empty($_POST['command'])) {
     $magentoObjectManager = $magentoObjectManagerFactory->create($_SERVER);
     $tokenModel = $magentoObjectManager->get(\Magento\Integration\Model\Oauth\Token::class);
 
-    $tokenPassedIn = urldecode($_POST['token']);
-    $command = urldecode($_POST['command']);
-
-    if (!empty($_POST['arguments'])) {
-        $arguments = urldecode($_POST['arguments']);
-    } else {
-        $arguments = null;
-    }
+    $tokenPassedIn = urldecode($_POST['token'] ?? '');
+    $command = urldecode($_POST['command'] ?? '');
+    $arguments = urldecode($_POST['arguments'] ?? '');
 
     // Token returned will be null if the token we passed in is invalid
     $tokenFromMagento = $tokenModel->loadByToken($tokenPassedIn)->getToken();
@@ -27,7 +22,8 @@ if (!empty($_POST['token']) && !empty($_POST['command'])) {
         $magentoBinary = $php . ' -f ../../../../bin/magento';
         $valid = validateCommand($magentoBinary, $command);
         if ($valid) {
-            $process = new Symfony\Component\Process\Process($magentoBinary . " $command" . " $arguments");
+            $fullCommand = escapeshellcmd($magentoBinary . " $command" . " $arguments");
+            $process = new Symfony\Component\Process\Process($fullCommand);
             $process->setIdleTimeout(60);
             $process->setTimeout(0);
             $idleTimeout = false;
@@ -45,6 +41,11 @@ if (!empty($_POST['token']) && !empty($_POST['command'])) {
                 $output = "CLI command timed out, no output available.";
                 $idleTimeout = true;
             }
+
+            if (checkForFilePath($output)) {
+                $output = "CLI output suppressed, filepath detected in output.";
+            }
+
             $exitCode = $process->getExitCode();
 
             if ($exitCode == 0 || $idleTimeout) {
@@ -107,4 +108,14 @@ function validateCommand($magentoBinary, $command)
 function trimAfterWhitespace($string)
 {
     return strtok($string, ' ');
+}
+
+/**
+ * Detects file path in string.
+ * @param string $string
+ * @return boolean
+ */
+function checkForFilePath($string)
+{
+    return preg_match('/\/[\S]+\//', $string);
 }

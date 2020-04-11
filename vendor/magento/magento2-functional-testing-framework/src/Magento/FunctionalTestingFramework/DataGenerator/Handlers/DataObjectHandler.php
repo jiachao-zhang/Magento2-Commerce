@@ -8,6 +8,7 @@ namespace Magento\FunctionalTestingFramework\DataGenerator\Handlers;
 
 use Magento\FunctionalTestingFramework\DataGenerator\Objects\EntityDataObject;
 use Magento\FunctionalTestingFramework\DataGenerator\Parsers\DataProfileSchemaParser;
+use Magento\FunctionalTestingFramework\Exceptions\TestFrameworkException;
 use Magento\FunctionalTestingFramework\Exceptions\XmlException;
 use Magento\FunctionalTestingFramework\ObjectManager\ObjectHandlerInterface;
 use Magento\FunctionalTestingFramework\ObjectManagerFactory;
@@ -32,6 +33,7 @@ class DataObjectHandler implements ObjectHandlerInterface
     const _ENTITY_KEY = 'entityKey';
     const _SEPARATOR = '->';
     const _REQUIRED_ENTITY = 'requiredEntity';
+    const _FILENAME = 'filename';
     const DATA_NAME_ERROR_MSG = "Entity names cannot contain non alphanumeric characters.\tData='%s'";
 
     /**
@@ -134,6 +136,7 @@ class DataObjectHandler implements ObjectHandlerInterface
             $uniquenessData = [];
             $vars = [];
             $parentEntity = null;
+            $filename = $rawEntity[self::_FILENAME] ?? null;
 
             if (array_key_exists(self::_DATA, $rawEntity)) {
                 $data = $this->processDataElements($rawEntity);
@@ -167,7 +170,8 @@ class DataObjectHandler implements ObjectHandlerInterface
                 $linkedEntities,
                 $uniquenessData,
                 $vars,
-                $parentEntity
+                $parentEntity,
+                $filename
             );
 
             $entityDataObjects[$entityDataObject->getName()] = $entityDataObject;
@@ -269,10 +273,14 @@ class DataObjectHandler implements ObjectHandlerInterface
      *
      * @param EntityDataObject $dataObject
      * @return EntityDataObject
+     * @throws TestFrameworkException
      */
     private function extendDataObject($dataObject)
     {
         if ($dataObject->getParentName() != null) {
+            if ($dataObject->getParentName() == $dataObject->getName()) {
+                throw new TestFrameworkException("Mftf Data can not extend from itself: " . $dataObject->getName());
+            }
             return $this->extendUtil->extendEntity($dataObject);
         }
         return $dataObject;

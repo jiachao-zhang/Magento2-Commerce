@@ -9,7 +9,6 @@ use Magento\FunctionalTestingFramework\DataGenerator\Objects\OperationDefinition
 use Magento\FunctionalTestingFramework\DataGenerator\Objects\OperationElement;
 use Magento\FunctionalTestingFramework\DataGenerator\Parsers\OperationDefinitionParser;
 use Magento\FunctionalTestingFramework\DataGenerator\Util\OperationElementExtractor;
-use Magento\FunctionalTestingFramework\Exceptions\XmlException;
 use Magento\FunctionalTestingFramework\ObjectManager\ObjectHandlerInterface;
 use Magento\FunctionalTestingFramework\ObjectManagerFactory;
 
@@ -25,6 +24,7 @@ class OperationDefinitionObjectHandler implements ObjectHandlerInterface
     const ENTITY_OPERATION_STORE_CODE = 'storeCode';
     const ENTITY_OPERATION_SUCCESS_REGEX = 'successRegex';
     const ENTITY_OPERATION_RETURN_REGEX = 'returnRegex';
+    const ENTITY_OPERATION_RETURN_INDEX = 'returnIndex';
     const ENTITY_OPERATION_HEADER = 'header';
     const ENTITY_OPERATION_CONTENT_TYPE = 'contentType';
     const ENTITY_OPERATION_HEADER_PARAM = 'param';
@@ -128,14 +128,12 @@ class OperationDefinitionObjectHandler implements ObjectHandlerInterface
      * @return void
      * @throws \Exception
      *
-     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
      * @SuppressWarnings(PHPMD.NPathComplexity)
      * @SuppressWarnings(PHPMD.UnusedPrivateMethod)
      * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
      */
     private function initialize()
     {
-        //TODO: Reduce CyclomaticComplexity/NPathComplexity/Length of method, remove warning suppression.
         $objectManager = ObjectManagerFactory::getObjectManager();
         $parser = $objectManager->create(OperationDefinitionParser::class);
         $parserOutput = $parser->readOperationMetadata()[OperationDefinitionObjectHandler::ENTITY_OPERATION_ROOT_TAG];
@@ -147,30 +145,13 @@ class OperationDefinitionObjectHandler implements ObjectHandlerInterface
             $auth = $opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_AUTH] ?? null;
             $successRegex = $opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_SUCCESS_REGEX] ?? null;
             $returnRegex = $opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_RETURN_REGEX] ?? null;
+            $returnIndex = $opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_RETURN_INDEX] ?? 0;
             $contentType = $opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_CONTENT_TYPE][0]['value']
                 ?? null;
-            $headers = [];
-            $params = [];
+            $headers = $this->initializeHeaders($opDefArray);
+            $params = $this->initializeParams($opDefArray);
             $operationElements = [];
             $removeBackend = $opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_BACKEND_REMOVE] ?? false;
-
-            if (array_key_exists(OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER, $opDefArray)) {
-                foreach ($opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER] as $headerEntry) {
-                    if (isset($headerEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER_VALUE])
-                        && $headerEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER_VALUE] !== 'none') {
-                        $headers[] = $headerEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER_PARAM]
-                            . ': '
-                            . $headerEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER_VALUE];
-                    }
-                }
-            }
-
-            if (array_key_exists(OperationDefinitionObjectHandler::ENTITY_OPERATION_URL_PARAM, $opDefArray)) {
-                foreach ($opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_URL_PARAM] as $paramEntry) {
-                    $params[$paramEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_URL_PARAM_KEY]] =
-                        $paramEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_URL_PARAM_VALUE];
-                }
-            }
 
             // extract relevant OperationObjects as OperationElements
             if (array_key_exists(OperationDefinitionObjectHandler::ENTITY_OPERATION_OBJECT, $opDefArray)) {
@@ -237,8 +218,49 @@ class OperationDefinitionObjectHandler implements ObjectHandlerInterface
                 $contentType,
                 $removeBackend,
                 $successRegex,
-                $returnRegex
+                $returnRegex,
+                $returnIndex
             );
         }
+    }
+
+    /**
+     * Convert headers metadata into an array of objects for further use in.
+     *
+     * @param array $opDefArray
+     * @return array
+     */
+    private function initializeHeaders(array $opDefArray): array
+    {
+        $headers = [];
+        if (array_key_exists(OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER, $opDefArray)) {
+            foreach ($opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER] as $headerEntry) {
+                if (isset($headerEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER_VALUE])
+                    && $headerEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER_VALUE] !== 'none') {
+                    $headers[] = $headerEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER_PARAM]
+                        . ': '
+                        . $headerEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_HEADER_VALUE];
+                }
+            }
+        }
+        return $headers;
+    }
+
+    /**
+     * Convert params metadata into an array of objects.
+     *
+     * @param array $opDefArray
+     * @return array
+     */
+    private function initializeParams(array $opDefArray): array
+    {
+        $params = [];
+        if (array_key_exists(OperationDefinitionObjectHandler::ENTITY_OPERATION_URL_PARAM, $opDefArray)) {
+            foreach ($opDefArray[OperationDefinitionObjectHandler::ENTITY_OPERATION_URL_PARAM] as $paramEntry) {
+                $params[$paramEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_URL_PARAM_KEY]] =
+                    $paramEntry[OperationDefinitionObjectHandler::ENTITY_OPERATION_URL_PARAM_VALUE];
+            }
+        }
+        return $params;
     }
 }
